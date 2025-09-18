@@ -575,12 +575,14 @@
 
         function loadMath() {
             const problem = mathProblems[Math.floor(Math.random() * mathProblems.length)];
+            const mathProblemElement = document.getElementById('mathProblem');
             
-            // Set problem text based on mode
+            // Hide or show problem text based on mode
             if (mathMode === 'easy') {
-                document.getElementById('mathProblem').textContent = problem.easyProblem;
+                mathProblemElement.textContent = problem.easyProblem;
+                mathProblemElement.style.display = 'block';
             } else {
-                document.getElementById('mathProblem').textContent = problem.problem;
+                mathProblemElement.style.display = 'none'; // Hide problem text in hard mode
             }
             
             const visualContainer = document.getElementById('mathVisual');
