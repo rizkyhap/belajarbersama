@@ -475,7 +475,7 @@
                         📝 Soal di dalam apps ini dikhususkan untuk anak di bawah 6 tahun<br>
                         👨‍👩‍👧‍👦 Ayah & Bunda harus memantau anak dalam belajar!<br>
                         ⚔️ Mode Battle: Adu cepat & pintar dengan teman!<br>
-                        🌐 <strong>Multiplayer ONLINE - Bisa main dari HP/Device berbeda!</strong>
+                        🌐 <strong>Multiplayer ONLINE - Bisa main dari HP/Device berbeda!</strong><br>
                     </p>
                 </div>
             </div>
@@ -708,11 +708,92 @@
         let playerId = '';
         let syncInterval = null;
         let roomListener = null;
+        let questionTimerInterval = null;
+        let currentQuestionStartTime = 0;
+
+        // API Configuration - QuizAPI.io
+        const QUIZ_API_URL = 'https://quizapi.io/api/v1/questions';
+        const QUIZ_API_KEY = 'YOUR_API_KEY_HERE'; // User perlu ganti dengan API key mereka
+
+        // Fetch questions from QuizAPI
+        async function fetchTriviaQuestions(count) {
+            try {
+                // QuizAPI params
+                const params = new URLSearchParams({
+                    apiKey: QUIZ_API_KEY,
+                    limit: count,
+                    difficulty: 'Easy,Medium,Hard' // Mix difficulties
+                });
+                
+                const response = await fetch(`${QUIZ_API_URL}?${params}`);
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data || data.length === 0) {
+                    throw new Error('No questions returned from API');
+                }
+                
+                // Transform QuizAPI data to our format
+                return data.map((q) => {
+                    const answers = q.answers;
+                    const correctAnswers = q.correct_answers;
+                    
+                    // Get all non-null answers
+                    const options = [];
+                    const correctKey = [];
+                    
+                    Object.keys(answers).forEach(key => {
+                        if (answers[key] !== null) {
+                            options.push(answers[key]);
+                            // Check if this is correct answer
+                            const correctKey_name = key + '_correct';
+                            if (correctAnswers[correctKey_name] === 'true') {
+                                correctKey.push(options.length - 1);
+                            }
+                        }
+                    });
+                    
+                    // Ensure we have exactly 4 options
+                    while (options.length < 4) {
+                        options.push('N/A');
+                    }
+                    
+                    // Get correct answer letter (A, B, C, D)
+                    const correctLetter = ['A', 'B', 'C', 'D'][correctKey[0] || 0];
+                    
+                    // Determine weight based on difficulty
+                    const difficulty = q.difficulty ? q.difficulty.toLowerCase() : 'medium';
+                    const weight = difficulty === 'easy' ? 5 : difficulty === 'hard' ? 15 : 10;
+                    
+                    return {
+                        category: q.category || 'General',
+                        difficulty: difficulty,
+                        weight: weight,
+                        question: q.question,
+                        options: options.slice(0, 4),
+                        correct: correctLetter
+                    };
+                });
+            } catch (error) {
+                console.error('Error fetching quiz questions:', error);
+                alert('Gagal mengambil soal dari QuizAPI!\n\nPastikan:\n1. API Key sudah diisi\n2. Koneksi internet aktif\n3. Quota API masih tersedia (100/hari gratis)');
+                return [];
+            }
+        }
 
         // Firebase Helper Functions
         function saveRoomToFirebase(room) {
             const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
             window.firebaseSet(roomRef, room);
+        }
+
+        function updateRoomField(field, value) {
+            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode + '/' + field);
+            window.firebaseSet(roomRef, value);
         }
 
         function getRoomFromFirebase(callback) {
@@ -727,7 +808,7 @@
         }
 
         function listenToRoom() {
-            if (roomListener) return; // Already listening
+            if (roomListener) return;
             
             const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
             roomListener = window.firebaseOnValue(roomRef, (snapshot) => {
@@ -739,17 +820,32 @@
                     // Check if game started
                     if (room.gameStarted && !room.gameEnded) {
                         if (document.getElementById('battleWaiting').classList.contains('hidden') === false) {
-                            // Game just started, load it
                             questionCount = room.questionCount || 10;
                             battleQuestions = room.questions || [];
                             startBattleForAll();
                         }
+                        
+                        // Sync current question
+                        if (room.currentQuestion !== undefined && room.currentQuestion !== currentQuestionIndex) {
+                            currentQuestionIndex = room.currentQuestion;
+                            currentQuestionStartTime = room.questionStartTime || Date.now();
+                            loadBattleQuestion();
+                        }
                     }
                     
-                    // Check if game ended
+                    // Check if game ended - sync podium data
                     if (room.gameEnded) {
-                        if (!document.getElementById('battleResults').classList.contains('hidden') === false) {
+                        const battleGame = document.getElementById('battleGame');
+                        const battleResults = document.getElementById('battleResults');
+                        
+                        if (!battleGame.classList.contains('hidden')) {
+                            // Still in game, move to results
+                            players = room.players.sort((a, b) => b.score - a.score);
                             endBattleForAll();
+                        } else if (!battleResults.classList.contains('hidden')) {
+                            // Already in results, just update leaderboard
+                            players = room.players.sort((a, b) => b.score - a.score);
+                            displayResults();
                         }
                     }
                 }
@@ -758,8 +854,6 @@
 
         function stopListeningToRoom() {
             if (roomListener) {
-                // Note: In Firebase v9+, onValue returns an unsubscribe function
-                // but for simplicity, we'll just set it to null
                 roomListener = null;
             }
         }
@@ -1171,25 +1265,38 @@
                 return;
             }
             
+            // Show loading
+            const startBtn = document.getElementById('startBattleBtn');
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memuat soal...';
+            
             questionCount = parseInt(document.getElementById('questionCountSelect').value);
             
-            // Generate random questions
-            battleQuestions = [];
-            const shuffled = [...battleQuestionsDB].sort(() => Math.random() - 0.5);
-            battleQuestions = shuffled.slice(0, questionCount);
-            
-            // Update room with game started status
-            getRoomFromFirebase((room) => {
-                if (room) {
-                    room.gameStarted = true;
-                    room.gameEnded = false;
-                    room.questionCount = questionCount;
-                    room.questions = battleQuestions;
-                    saveRoomToFirebase(room);
+            // Fetch questions from API
+            fetchTriviaQuestions(questionCount).then(questions => {
+                if (questions.length === 0) {
+                    startBtn.disabled = false;
+                    startBtn.innerHTML = '<i class="fas fa-play"></i> Mulai Battle!';
+                    return;
                 }
+                
+                battleQuestions = questions;
+                
+                // Update room with game started status
+                getRoomFromFirebase((room) => {
+                    if (room) {
+                        room.gameStarted = true;
+                        room.gameEnded = false;
+                        room.questionCount = questionCount;
+                        room.questions = battleQuestions;
+                        room.currentQuestion = 0;
+                        room.questionStartTime = Date.now();
+                        saveRoomToFirebase(room);
+                    }
+                });
+                
+                startBattleForAll();
             });
-            
-            startBattleForAll();
         }
 
         function startBattleForAll() {
@@ -1215,44 +1322,65 @@
             document.getElementById('battleQuestion').innerHTML = `
                 ${question.question}
                 <span class="difficulty-badge difficulty-${question.difficulty}">
-                    ${question.difficulty === 'easy' ? 'Mudah' : question.difficulty === 'medium' ? 'Sedang' : 'Sulit'} 
-                    (+${question.weight} poin)
+                    ${question.difficulty === 'easy' ? 'Easy' : question.difficulty === 'medium' ? 'Medium' : 'Hard'} 
+                    (+${question.weight} points)
                 </span>
             `;
             
-            document.getElementById('optionA').textContent = question.options[0];
-            document.getElementById('optionB').textContent = question.options[1];
-            document.getElementById('optionC').textContent = question.options[2];
-            document.getElementById('optionD').textContent = question.options[3];
+            document.getElementById('optionA').textContent = question.options[0] || 'N/A';
+            document.getElementById('optionB').textContent = question.options[1] || 'N/A';
+            document.getElementById('optionC').textContent = question.options[2] || 'N/A';
+            document.getElementById('optionD').textContent = question.options[3] || 'N/A';
             
             // Reset options
             document.querySelectorAll('.answer-option').forEach(opt => {
                 opt.className = 'answer-option';
+                opt.style.pointerEvents = 'auto';
             });
             
             selectedAnswer = null;
             timeLeft = 7;
-            startTimer();
+            
+            // Sync start time from Firebase or set new
+            if (!currentQuestionStartTime) {
+                currentQuestionStartTime = Date.now();
+            }
+            
+            startSyncTimer();
         }
 
-        function startTimer() {
-            clearInterval(timerInterval);
+        function startSyncTimer() {
+            clearInterval(questionTimerInterval);
             
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                document.getElementById('timerText').textContent = timeLeft;
+            questionTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - currentQuestionStartTime) / 1000);
+                timeLeft = Math.max(0, 7 - elapsed);
                 
+                document.getElementById('timerText').textContent = timeLeft;
                 const percentage = (timeLeft / 7) * 100;
                 document.getElementById('timerFill').style.width = percentage + '%';
                 
                 if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    checkAnswer();
+                    clearInterval(questionTimerInterval);
+                    
+                    // Disable all options
+                    document.querySelectorAll('.answer-option').forEach(opt => {
+                        opt.style.pointerEvents = 'none';
+                    });
+                    
+                    // Only admin moves to next question
+                    if (isAdmin) {
+                        setTimeout(() => {
+                            moveToNextQuestion();
+                        }, 2000);
+                    }
                 }
-            }, 1000);
+            }, 100);
         }
 
         function selectAnswer(element, answer) {
+            if (timeLeft <= 0) return;
+            
             // Remove previous selection
             document.querySelectorAll('.answer-option').forEach(opt => {
                 opt.classList.remove('selected');
@@ -1260,44 +1388,78 @@
             
             element.classList.add('selected');
             selectedAnswer = answer;
-            
-            // Auto submit after selection
-            setTimeout(() => {
-                checkAnswer();
-            }, 500);
         }
 
-        function checkAnswer() {
-            clearInterval(timerInterval);
+        function moveToNextQuestion() {
+            if (!isAdmin) return;
             
             const question = battleQuestions[currentQuestionIndex];
-            const isCorrect = selectedAnswer === question.correct;
             
-            // Show correct/wrong answers
-            document.querySelectorAll('.answer-option').forEach((opt, idx) => {
-                const optionLetter = ['A', 'B', 'C', 'D'][idx];
-                if (optionLetter === question.correct) {
-                    opt.classList.add('correct');
-                } else if (optionLetter === selectedAnswer && !isCorrect) {
-                    opt.classList.add('wrong');
+            // Show correct/wrong for all players
+            showAnswerFeedback(question.correct);
+            
+            setTimeout(() => {
+                currentQuestionIndex++;
+                currentQuestionStartTime = 0;
+                
+                if (currentQuestionIndex >= battleQuestions.length) {
+                    // Game ended
+                    getRoomFromFirebase((room) => {
+                        if (room) {
+                            room.gameEnded = true;
+                            // Sort and save final scores
+                            room.players.sort((a, b) => b.score - a.score);
+                            saveRoomToFirebase(room);
+                        }
+                    });
+                } else {
+                    // Move to next question
+                    getRoomFromFirebase((room) => {
+                        if (room) {
+                            room.currentQuestion = currentQuestionIndex;
+                            room.questionStartTime = Date.now();
+                            currentQuestionStartTime = room.questionStartTime;
+                            saveRoomToFirebase(room);
+                        }
+                    });
                 }
-            });
+            }, 2000);
+        }
+
+        function showAnswerFeedback(correctAnswer) {
+            const question = battleQuestions[currentQuestionIndex];
+            const isCorrect = selectedAnswer === correctAnswer;
             
             // Update score if correct
             if (isCorrect) {
                 playerScore += question.weight;
                 document.getElementById('playerScore').textContent = playerScore;
+                
+                // Update score in Firebase
+                getRoomFromFirebase((room) => {
+                    if (room) {
+                        const playerIndex = room.players.findIndex(p => p.id === playerId);
+                        if (playerIndex !== -1) {
+                            room.players[playerIndex].score = playerScore;
+                            saveRoomToFirebase(room);
+                        }
+                    }
+                });
             }
             
-            // Move to next question after 2 seconds
-            setTimeout(() => {
-                currentQuestionIndex++;
-                loadBattleQuestion();
-            }, 2000);
+            // Show correct/wrong visual feedback
+            document.querySelectorAll('.answer-option').forEach((opt, idx) => {
+                const optionLetter = ['A', 'B', 'C', 'D'][idx];
+                if (optionLetter === correctAnswer) {
+                    opt.classList.add('correct');
+                } else if (optionLetter === selectedAnswer && !isCorrect) {
+                    opt.classList.add('wrong');
+                }
+            });
         }
 
         function endBattle() {
-            // Update player score in Firebase
+            // Update player final score in Firebase
             getRoomFromFirebase((room) => {
                 if (room) {
                     const playerIndex = room.players.findIndex(p => p.id === playerId);
@@ -1305,18 +1467,26 @@
                         room.players[playerIndex].score = playerScore;
                         room.players[playerIndex].finished = true;
                     }
-                    
-                    // Check if all players finished
-                    const allFinished = room.players.every(p => p.finished);
-                    if (allFinished) {
-                        room.gameEnded = true;
-                    }
-                    
                     saveRoomToFirebase(room);
-                    
-                    // Sort players by score
-                    players = room.players.sort((a, b) => b.score - a.score);
                 }
+            });
+        }
+
+        function endBattleForAll() {
+            clearInterval(questionTimerInterval);
+            
+            getRoomFromFirebase((room) => {
+                if (room) {
+                    // Get sorted players from Firebase
+                    players = room.players.sort((a, b) => b.score - a.score);
+                    
+                    document.getElementById('battleGame').classList.add('hidden');
+                    document.getElementById('battleResults').classList.remove('hidden');
+                    
+                    displayResults();
+                }
+            });
+        }
                 
                 endBattleForAll();
             });
