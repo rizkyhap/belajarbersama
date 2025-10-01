@@ -476,6 +476,7 @@
                         👨‍👩‍👧‍👦 Ayah & Bunda harus memantau anak dalam belajar!<br>
                         ⚔️ Mode Battle: Adu cepat & pintar dengan teman!<br>
                         🌐 <strong>Multiplayer ONLINE - Bisa main dari HP/Device berbeda!</strong><br>
+                         <strong><b>Update Version 2.0</b></strong>
                     </p>
                 </div>
             </div>
@@ -598,11 +599,7 @@
         <!-- Battle Results -->
         <div id="battleResults" class="game-card hidden">
             <h2 class="text-center mb-4">🏆 Hasil Battle</h2>
-            
-            <div class="podium" id="podium">
-                <!-- Top 3 will be displayed here -->
-            </div>
-            
+
             <div class="leaderboard">
                 <h4 class="text-center mb-3">📊 Leaderboard Lengkap</h4>
                 <div id="fullLeaderboard">
@@ -1134,8 +1131,36 @@
         ];
 
         const sequenceProblems = [
-            { question: 'Urutan angka dari kecil ke besar:', optionA: '1234', optionB: '4321', correct: 'A' },
-            { question: 'Urutan angka yang benar:', optionA: '4213', optionB: '1234', correct: 'B' }
+            { question: 'Urutan angka dari kecil ke besar:', optionA: '1 2 3 4 5', optionB: '5 4 3 2 1', correct: 'A' },
+            { question: 'Urutan angka yang benar:', optionA: '4 2 1 3', optionB: '1 2 3 4', correct: 'B' },
+            { question: 'Urutan dari 1 sampai 5:', optionA: '1 3 2 4 5', optionB: '1 2 3 4 5', correct: 'B' },
+            { question: 'Urutan menurun dari 5 ke 1:', optionA: '5 4 3 2 1', optionB: '1 2 3 4 5', correct: 'A' },
+            { question: 'Urutan naik yang benar:', optionA: '2 1 4 3 5', optionB: '1 2 3 4 5', correct: 'B' },
+            { question: 'Urutan dari 6 sampai 10:', optionA: '6 7 8 9 10', optionB: '10 9 8 7 6', correct: 'A' },
+            { question: 'Urutan menurun dari 10:', optionA: '10 9 8 7 6', optionB: '6 7 8 9 10', correct: 'A' },
+            { question: 'Urutan angka 11-15:', optionA: '15 14 13 12 11', optionB: '11 12 13 14 15', correct: 'B' },
+            { question: 'Urutan dari 16 ke 20:', optionA: '16 17 18 19 20', optionB: '20 19 18 17 16', correct: 'A' },
+            { question: 'Urutan menurun 20-16:', optionA: '20 19 18 17 16', optionB: '16 17 18 19 20', correct: 'A' },
+            { question: 'Urutan angka 1-6:', optionA: '6 5 4 3 2 1', optionB: '1 2 3 4 5 6', correct: 'B' },
+            { question: 'Urutan dari 7 sampai 12:', optionA: '7 8 9 10 11 12', optionB: '12 11 10 9 8 7', correct: 'A' },
+            { question: 'Urutan menurun 15-10:', optionA: '15 14 13 12 11 10', optionB: '10 11 12 13 14 15', correct: 'A' },
+            { question: 'Urutan naik 8-13:', optionA: '13 12 11 10 9 8', optionB: '8 9 10 11 12 13', correct: 'B' },
+            { question: 'Urutan angka 3-8:', optionA: '3 4 5 6 7 8', optionB: '8 7 6 5 4 3', correct: 'A' },
+            { question: 'Urutan menurun 12-7:', optionA: '12 11 10 9 8 7', optionB: '7 8 9 10 11 12', correct: 'A' },
+            { question: 'Urutan dari 14 sampai 18:', optionA: '14 15 16 17 18', optionB: '18 17 16 15 14', correct: 'A' },
+            { question: 'Urutan angka 5-10:', optionA: '5 6 7 8 9 10', optionB: '10 9 8 7 6 5', correct: 'A' },
+            { question: 'Urutan menurun 20-15:', optionA: '15 16 17 18 19 20', optionB: '20 19 18 17 16 15', correct: 'B' },
+            { question: 'Urutan naik 9-14:', optionA: '9 10 11 12 13 14', optionB: '14 13 12 11 10 9', correct: 'A' },
+            { question: 'Urutan dari 2 sampai 7:', optionA: '2 3 4 5 6 7', optionB: '7 6 5 4 3 2', correct: 'A' },
+            { question: 'Urutan menurun 18-13:', optionA: '18 17 16 15 14 13', optionB: '13 14 15 16 17 18', correct: 'A' },
+            { question: 'Urutan angka 10-15:', optionA: '15 14 13 12 11 10', optionB: '10 11 12 13 14 15', correct: 'B' },
+            { question: 'Urutan dari 4 sampai 9:', optionA: '4 5 6 7 8 9', optionB: '9 8 7 6 5 4', correct: 'A' },
+            { question: 'Urutan menurun 17-12:', optionA: '17 16 15 14 13 12', optionB: '12 13 14 15 16 17', correct: 'A' },
+            { question: 'Urutan naik 13-18:', optionA: '18 17 16 15 14 13', optionB: '13 14 15 16 17 18', correct: 'B' },
+            { question: 'Urutan dari 1 sampai 10:', optionA: '1 2 3 4 5 6 7 8 9 10', optionB: '10 9 8 7 6 5 4 3 2 1', correct: 'A' },
+            { question: 'Urutan menurun 20-11:', optionA: '20 19 18 17 16 15 14 13 12 11', optionB: '11 12 13 14 15 16 17 18 19 20', correct: 'A' },
+            { question: 'Urutan angka 5-15:', optionA: '5 6 7 8 9 10 11 12 13 14 15', optionB: '15 14 13 12 11 10 9 8 7 6 5', correct: 'A' },
+            { question: 'Urutan dari 10 sampai 20:', optionA: '10 11 12 13 14 15 16 17 18 19 20', optionB: '20 19 18 17 16 15 14 13 12 11 10', correct: 'A' }
         ];
 
         // Battle Mode Functions
