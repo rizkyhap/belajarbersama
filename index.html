@@ -6,6 +6,42 @@
     <title>Belajar Yuk! 🎓 - Battle Mode</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Firebase SDK v9+ (Modular) -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getDatabase, ref, set, get, onValue, update, remove, push, child } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+        
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAJMQZiUxlIvBMBABqVpbsi1Axz0ASGI48",
+            authDomain: "belajar-yuk-battle.firebaseapp.com",
+            databaseURL: "https://belajar-yuk-battle-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "belajar-yuk-battle",
+            storageBucket: "belajar-yuk-battle.firebasestorage.app",
+            messagingSenderId: "262156840353",
+            appId: "1:262156840353:web:a99f5e1132383c70ad6fe0",
+            measurementId: "G-3FFYJKEW8C"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        
+        // Make Firebase functions available globally
+        window.firebaseDB = database;
+        window.firebaseRef = ref;
+        window.firebaseSet = set;
+        window.firebaseGet = get;
+        window.firebaseOnValue = onValue;
+        window.firebaseUpdate = update;
+        window.firebaseRemove = remove;
+        window.firebasePush = push;
+        window.firebaseChild = child;
+        
+        console.log('🔥 Firebase initialized successfully!');
+    </script>
+    
     <style>
         body {
             background: url('child.png') no-repeat center center fixed;
@@ -439,7 +475,7 @@
                         📝 Soal di dalam apps ini dikhususkan untuk anak di bawah 6 tahun<br>
                         👨‍👩‍👧‍👦 Ayah & Bunda harus memantau anak dalam belajar!<br>
                         ⚔️ Mode Battle: Adu cepat & pintar dengan teman!<br>
-                        💡 <strong>Buka di TAB/WINDOW berbeda untuk multiplayer!</strong>
+                        🌐 <strong>Multiplayer ONLINE - Bisa main dari HP/Device berbeda!</strong>
                     </p>
                 </div>
             </div>
@@ -671,6 +707,62 @@
         let questionCount = 10;
         let playerId = '';
         let syncInterval = null;
+        let roomListener = null;
+
+        // Firebase Helper Functions
+        function saveRoomToFirebase(room) {
+            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
+            window.firebaseSet(roomRef, room);
+        }
+
+        function getRoomFromFirebase(callback) {
+            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
+            window.firebaseGet(roomRef).then((snapshot) => {
+                if (snapshot.exists()) {
+                    callback(snapshot.val());
+                } else {
+                    callback(null);
+                }
+            });
+        }
+
+        function listenToRoom() {
+            if (roomListener) return; // Already listening
+            
+            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
+            roomListener = window.firebaseOnValue(roomRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const room = snapshot.val();
+                    players = room.players || [];
+                    updatePlayerList();
+                    
+                    // Check if game started
+                    if (room.gameStarted && !room.gameEnded) {
+                        if (document.getElementById('battleWaiting').classList.contains('hidden') === false) {
+                            // Game just started, load it
+                            questionCount = room.questionCount || 10;
+                            battleQuestions = room.questions || [];
+                            startBattleForAll();
+                        }
+                    }
+                    
+                    // Check if game ended
+                    if (room.gameEnded) {
+                        if (!document.getElementById('battleResults').classList.contains('hidden') === false) {
+                            endBattleForAll();
+                        }
+                    }
+                }
+            });
+        }
+
+        function stopListeningToRoom() {
+            if (roomListener) {
+                // Note: In Firebase v9+, onValue returns an unsubscribe function
+                // but for simplicity, we'll just set it to null
+                roomListener = null;
+            }
+        }
 
         // Battle Questions Database (Soal CPNS style)
         const battleQuestionsDB = [
@@ -961,33 +1053,6 @@
             return 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
         }
 
-        function saveRoomToStorage(room) {
-            localStorage.setItem('battleRoom_' + roomCode, JSON.stringify(room));
-        }
-
-        function getRoomFromStorage() {
-            const data = localStorage.getItem('battleRoom_' + roomCode);
-            return data ? JSON.parse(data) : null;
-        }
-
-        function syncRoomData() {
-            const room = getRoomFromStorage();
-            if (room) {
-                players = room.players || [];
-                updatePlayerList();
-                
-                // Check if game started
-                if (room.gameStarted && !document.getElementById('battleGame').classList.contains('hidden')) {
-                    // Already in game
-                } else if (room.gameStarted && document.getElementById('battleWaiting').classList.contains('hidden') === false) {
-                    // Game just started, load it
-                    questionCount = room.questionCount || 10;
-                    battleQuestions = room.questions || [];
-                    startBattleForAll();
-                }
-            }
-        }
-
         function createRoom() {
             roomCode = generateRoomCode();
             playerId = generatePlayerId();
@@ -1003,11 +1068,12 @@
                 }],
                 createdAt: Date.now(),
                 gameStarted: false,
+                gameEnded: false,
                 questionCount: 10,
                 questions: []
             };
             
-            saveRoomToStorage(room);
+            saveRoomToFirebase(room);
             players = room.players;
             
             document.getElementById('battleMenu').classList.add('hidden');
@@ -1016,8 +1082,8 @@
             
             updatePlayerList();
             
-            // Start syncing
-            syncInterval = setInterval(syncRoomData, 1000);
+            // Start listening to room changes
+            listenToRoom();
             
             // Admin can change settings
             document.getElementById('questionCountSelect').disabled = false;
@@ -1033,47 +1099,48 @@
             
             roomCode = code;
             playerId = generatePlayerId();
-            const room = getRoomFromStorage();
             
-            if (!room) {
-                alert('Room tidak ditemukan! Pastikan kode benar.');
-                return;
-            }
-            
-            if (room.players.length >= 15) {
-                alert('Room sudah penuh! (Maksimal 15 pemain)');
-                return;
-            }
-            
-            if (room.gameStarted) {
-                alert('Game sudah dimulai! Tidak bisa join.');
-                return;
-            }
-            
-            isAdmin = false;
-            
-            // Add player to room
-            room.players.push({ 
-                id: playerId,
-                name: username, 
-                score: 0, 
-                isAdmin: false 
+            getRoomFromFirebase((room) => {
+                if (!room) {
+                    alert('Room tidak ditemukan! Pastikan kode benar.');
+                    return;
+                }
+                
+                if (room.players.length >= 15) {
+                    alert('Room sudah penuh! (Maksimal 15 pemain)');
+                    return;
+                }
+                
+                if (room.gameStarted) {
+                    alert('Game sudah dimulai! Tidak bisa join.');
+                    return;
+                }
+                
+                isAdmin = false;
+                
+                // Add player to room
+                room.players.push({ 
+                    id: playerId,
+                    name: username, 
+                    score: 0, 
+                    isAdmin: false 
+                });
+                
+                saveRoomToFirebase(room);
+                players = room.players;
+                
+                document.getElementById('battleMenu').classList.add('hidden');
+                document.getElementById('battleWaiting').classList.remove('hidden');
+                document.getElementById('displayRoomCode').textContent = roomCode;
+                
+                // Non-admin cannot change settings
+                document.getElementById('questionCountSelect').disabled = true;
+                
+                updatePlayerList();
+                
+                // Start listening to room changes
+                listenToRoom();
             });
-            
-            saveRoomToStorage(room);
-            players = room.players;
-            
-            document.getElementById('battleMenu').classList.add('hidden');
-            document.getElementById('battleWaiting').classList.remove('hidden');
-            document.getElementById('displayRoomCode').textContent = roomCode;
-            
-            // Non-admin cannot change settings
-            document.getElementById('questionCountSelect').disabled = true;
-            
-            updatePlayerList();
-            
-            // Start syncing
-            syncInterval = setInterval(syncRoomData, 1000);
         }
 
         function updatePlayerList() {
@@ -1112,11 +1179,15 @@
             battleQuestions = shuffled.slice(0, questionCount);
             
             // Update room with game started status
-            const room = getRoomFromStorage();
-            room.gameStarted = true;
-            room.questionCount = questionCount;
-            room.questions = battleQuestions;
-            saveRoomToStorage(room);
+            getRoomFromFirebase((room) => {
+                if (room) {
+                    room.gameStarted = true;
+                    room.gameEnded = false;
+                    room.questionCount = questionCount;
+                    room.questions = battleQuestions;
+                    saveRoomToFirebase(room);
+                }
+            });
             
             startBattleForAll();
         }
@@ -1226,19 +1297,32 @@
         }
 
         function endBattle() {
-            // Update player score in room
-            const room = getRoomFromStorage();
-            if (room) {
-                const playerIndex = room.players.findIndex(p => p.id === playerId);
-                if (playerIndex !== -1) {
-                    room.players[playerIndex].score = playerScore;
-                    saveRoomToStorage(room);
+            // Update player score in Firebase
+            getRoomFromFirebase((room) => {
+                if (room) {
+                    const playerIndex = room.players.findIndex(p => p.id === playerId);
+                    if (playerIndex !== -1) {
+                        room.players[playerIndex].score = playerScore;
+                        room.players[playerIndex].finished = true;
+                    }
+                    
+                    // Check if all players finished
+                    const allFinished = room.players.every(p => p.finished);
+                    if (allFinished) {
+                        room.gameEnded = true;
+                    }
+                    
+                    saveRoomToFirebase(room);
+                    
+                    // Sort players by score
+                    players = room.players.sort((a, b) => b.score - a.score);
                 }
                 
-                // Sort players by score
-                players = room.players.sort((a, b) => b.score - a.score);
-            }
-            
+                endBattleForAll();
+            });
+        }
+
+        function endBattleForAll() {
             document.getElementById('battleGame').classList.add('hidden');
             document.getElementById('battleResults').classList.remove('hidden');
             
@@ -1287,24 +1371,29 @@
                 return;
             }
             
-            // Reset scores in room
-            const room = getRoomFromStorage();
-            if (room) {
-                room.players.forEach(p => p.score = 0);
-                room.gameStarted = false;
-                room.questions = [];
-                saveRoomToStorage(room);
-                players = room.players;
-            }
-            
-            currentQuestionIndex = 0;
-            playerScore = 0;
-            
-            document.getElementById('battleResults').classList.add('hidden');
-            document.getElementById('battleWaiting').classList.remove('hidden');
-            document.getElementById('playerScore').textContent = '0';
-            
-            updatePlayerList();
+            // Reset scores in Firebase
+            getRoomFromFirebase((room) => {
+                if (room) {
+                    room.players.forEach(p => {
+                        p.score = 0;
+                        p.finished = false;
+                    });
+                    room.gameStarted = false;
+                    room.gameEnded = false;
+                    room.questions = [];
+                    saveRoomToFirebase(room);
+                    players = room.players;
+                    
+                    currentQuestionIndex = 0;
+                    playerScore = 0;
+                    
+                    document.getElementById('battleResults').classList.add('hidden');
+                    document.getElementById('battleWaiting').classList.remove('hidden');
+                    document.getElementById('playerScore').textContent = '0';
+                    
+                    updatePlayerList();
+                }
+            });
         }
 
         function showBattleMenu() {
@@ -1530,25 +1619,28 @@
 
         function goBack() {
             clearInterval(timerInterval);
-            clearInterval(syncInterval);
+            stopListeningToRoom();
             
             // Leave room if in battle
             if (roomCode) {
-                const room = getRoomFromStorage();
-                if (room && !room.gameStarted) {
-                    // Remove player from room
-                    room.players = room.players.filter(p => p.id !== playerId);
-                    if (room.players.length === 0) {
-                        // Delete room if empty
-                        localStorage.removeItem('battleRoom_' + roomCode);
-                    } else {
-                        // If admin left, make first player new admin
-                        if (isAdmin && room.players.length > 0) {
-                            room.players[0].isAdmin = true;
+                getRoomFromFirebase((room) => {
+                    if (room && !room.gameStarted) {
+                        // Remove player from room
+                        room.players = room.players.filter(p => p.id !== playerId);
+                        
+                        if (room.players.length === 0) {
+                            // Delete room if empty
+                            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
+                            window.firebaseRemove(roomRef);
+                        } else {
+                            // If admin left, make first player new admin
+                            if (isAdmin && room.players.length > 0) {
+                                room.players[0].isAdmin = true;
+                            }
+                            saveRoomToFirebase(room);
                         }
-                        saveRoomToStorage(room);
                     }
-                }
+                });
                 roomCode = '';
             }
             
