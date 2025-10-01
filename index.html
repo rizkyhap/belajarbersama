@@ -6,42 +6,6 @@
     <title>Belajar Yuk! 🎓 - Battle Mode</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    
-    <!-- Firebase SDK v9+ (Modular) -->
-    <script type="module">
-        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-        import { getDatabase, ref, set, get, onValue, update, remove, push, child } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
-        
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyAJMQZiUxlIvBMBABqVpbsi1Axz0ASGI48",
-            authDomain: "belajar-yuk-battle.firebaseapp.com",
-            databaseURL: "https://belajar-yuk-battle-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "belajar-yuk-battle",
-            storageBucket: "belajar-yuk-battle.firebasestorage.app",
-            messagingSenderId: "262156840353",
-            appId: "1:262156840353:web:a99f5e1132383c70ad6fe0",
-            measurementId: "G-3FFYJKEW8C"
-        };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const database = getDatabase(app);
-        
-        // Make Firebase functions available globally
-        window.firebaseDB = database;
-        window.firebaseRef = ref;
-        window.firebaseSet = set;
-        window.firebaseGet = get;
-        window.firebaseOnValue = onValue;
-        window.firebaseUpdate = update;
-        window.firebaseRemove = remove;
-        window.firebasePush = push;
-        window.firebaseChild = child;
-        
-        console.log('🔥 Firebase initialized successfully!');
-    </script>
-    
     <style>
         body {
             background: url('child.png') no-repeat center center fixed;
@@ -474,8 +438,7 @@
                     <p class="notes-text">
                         📝 Soal di dalam apps ini dikhususkan untuk anak di bawah 6 tahun<br>
                         👨‍👩‍👧‍👦 Ayah & Bunda harus memantau anak dalam belajar!<br>
-                        ⚔️ Mode Battle: Adu cepat & pintar dengan teman!<br>
-                        @<strong>Version 1.1</strong>
+                        ⚔️ Mode Battle: Adu cepat & pintar dengan teman!
                     </p>
                 </div>
             </div>
@@ -598,7 +561,7 @@
         <!-- Battle Results -->
         <div id="battleResults" class="game-card hidden">
             <h2 class="text-center mb-4">🏆 Hasil Battle</h2>
-                        
+  
             <div class="leaderboard">
                 <h4 class="text-center mb-3">📊 Leaderboard Lengkap</h4>
                 <div id="fullLeaderboard">
@@ -701,158 +664,6 @@
         let timerInterval = null;
         let selectedAnswer = null;
         let questionCount = 10;
-        let playerId = '';
-        let syncInterval = null;
-        let roomListener = null;
-        let questionTimerInterval = null;
-        let currentQuestionStartTime = 0;
-
-        // API Configuration - QuizAPI.io
-        const QUIZ_API_URL = 'https://quizapi.io/api/v1/questions';
-        const QUIZ_API_KEY = 'YOUR_API_KEY_HERE'; // User perlu ganti dengan API key mereka
-
-        // Fetch questions from QuizAPI
-        async function fetchTriviaQuestions(count) {
-            try {
-                // QuizAPI params
-                const params = new URLSearchParams({
-                    apiKey: QUIZ_API_KEY,
-                    limit: count,
-                    difficulty: 'Easy,Medium,Hard' // Mix difficulties
-                });
-                
-                const response = await fetch(`${QUIZ_API_URL}?${params}`);
-                
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                
-                if (!data || data.length === 0) {
-                    throw new Error('No questions returned from API');
-                }
-                
-                // Transform QuizAPI data to our format
-                return data.map((q) => {
-                    const answers = q.answers;
-                    const correctAnswers = q.correct_answers;
-                    
-                    // Get all non-null answers
-                    const options = [];
-                    const correctKey = [];
-                    
-                    Object.keys(answers).forEach(key => {
-                        if (answers[key] !== null) {
-                            options.push(answers[key]);
-                            // Check if this is correct answer
-                            const correctKey_name = key + '_correct';
-                            if (correctAnswers[correctKey_name] === 'true') {
-                                correctKey.push(options.length - 1);
-                            }
-                        }
-                    });
-                    
-                    // Ensure we have exactly 4 options
-                    while (options.length < 4) {
-                        options.push('N/A');
-                    }
-                    
-                    // Get correct answer letter (A, B, C, D)
-                    const correctLetter = ['A', 'B', 'C', 'D'][correctKey[0] || 0];
-                    
-                    // Determine weight based on difficulty
-                    const difficulty = q.difficulty ? q.difficulty.toLowerCase() : 'medium';
-                    const weight = difficulty === 'easy' ? 5 : difficulty === 'hard' ? 15 : 10;
-                    
-                    return {
-                        category: q.category || 'General',
-                        difficulty: difficulty,
-                        weight: weight,
-                        question: q.question,
-                        options: options.slice(0, 4),
-                        correct: correctLetter
-                    };
-                });
-            } catch (error) {
-                console.error('Error fetching quiz questions:', error);
-                alert('Gagal mengambil soal dari QuizAPI!\n\nPastikan:\n1. API Key sudah diisi\n2. Koneksi internet aktif\n3. Quota API masih tersedia (100/hari gratis)');
-                return [];
-            }
-        }
-
-        // Firebase Helper Functions
-        function saveRoomToFirebase(room) {
-            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
-            window.firebaseSet(roomRef, room);
-        }
-
-        function updateRoomField(field, value) {
-            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode + '/' + field);
-            window.firebaseSet(roomRef, value);
-        }
-
-        function getRoomFromFirebase(callback) {
-            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
-            window.firebaseGet(roomRef).then((snapshot) => {
-                if (snapshot.exists()) {
-                    callback(snapshot.val());
-                } else {
-                    callback(null);
-                }
-            });
-        }
-
-        function listenToRoom() {
-            if (roomListener) return;
-            
-            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
-            roomListener = window.firebaseOnValue(roomRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    const room = snapshot.val();
-                    players = room.players || [];
-                    updatePlayerList();
-                    
-                    // Check if game started
-                    if (room.gameStarted && !room.gameEnded) {
-                        if (document.getElementById('battleWaiting').classList.contains('hidden') === false) {
-                            questionCount = room.questionCount || 10;
-                            battleQuestions = room.questions || [];
-                            startBattleForAll();
-                        }
-                        
-                        // Sync current question
-                        if (room.currentQuestion !== undefined && room.currentQuestion !== currentQuestionIndex) {
-                            currentQuestionIndex = room.currentQuestion;
-                            currentQuestionStartTime = room.questionStartTime || Date.now();
-                            loadBattleQuestion();
-                        }
-                    }
-                    
-                    // Check if game ended - sync podium data
-                    if (room.gameEnded) {
-                        const battleGame = document.getElementById('battleGame');
-                        const battleResults = document.getElementById('battleResults');
-                        
-                        if (!battleGame.classList.contains('hidden')) {
-                            // Still in game, move to results
-                            players = room.players.sort((a, b) => b.score - a.score);
-                            endBattleForAll();
-                        } else if (!battleResults.classList.contains('hidden')) {
-                            // Already in results, just update leaderboard
-                            players = room.players.sort((a, b) => b.score - a.score);
-                            displayResults();
-                        }
-                    }
-                }
-            });
-        }
-
-        function stopListeningToRoom() {
-            if (roomListener) {
-                roomListener = null;
-            }
-        }
 
         // Battle Questions Database (Soal CPNS style)
         const battleQuestionsDB = [
@@ -1130,36 +941,8 @@
         ];
 
         const sequenceProblems = [
-            { question: 'Urutan angka dari kecil ke besar:', optionA: '1 2 3 4 5', optionB: '5 4 3 2 1', correct: 'A' },
-            { question: 'Urutan angka yang benar:', optionA: '4 2 1 3', optionB: '1 2 3 4', correct: 'B' },
-            { question: 'Urutan dari 1 sampai 5:', optionA: '1 3 2 4 5', optionB: '1 2 3 4 5', correct: 'B' },
-            { question: 'Urutan menurun dari 5 ke 1:', optionA: '5 4 3 2 1', optionB: '1 2 3 4 5', correct: 'A' },
-            { question: 'Urutan naik yang benar:', optionA: '2 1 4 3 5', optionB: '1 2 3 4 5', correct: 'B' },
-            { question: 'Urutan dari 6 sampai 10:', optionA: '6 7 8 9 10', optionB: '10 9 8 7 6', correct: 'A' },
-            { question: 'Urutan menurun dari 10:', optionA: '10 9 8 7 6', optionB: '6 7 8 9 10', correct: 'A' },
-            { question: 'Urutan angka 11-15:', optionA: '15 14 13 12 11', optionB: '11 12 13 14 15', correct: 'B' },
-            { question: 'Urutan dari 16 ke 20:', optionA: '16 17 18 19 20', optionB: '20 19 18 17 16', correct: 'A' },
-            { question: 'Urutan menurun 20-16:', optionA: '20 19 18 17 16', optionB: '16 17 18 19 20', correct: 'A' },
-            { question: 'Urutan angka 1-6:', optionA: '6 5 4 3 2 1', optionB: '1 2 3 4 5 6', correct: 'B' },
-            { question: 'Urutan dari 7 sampai 12:', optionA: '7 8 9 10 11 12', optionB: '12 11 10 9 8 7', correct: 'A' },
-            { question: 'Urutan menurun 15-10:', optionA: '15 14 13 12 11 10', optionB: '10 11 12 13 14 15', correct: 'A' },
-            { question: 'Urutan naik 8-13:', optionA: '13 12 11 10 9 8', optionB: '8 9 10 11 12 13', correct: 'B' },
-            { question: 'Urutan angka 3-8:', optionA: '3 4 5 6 7 8', optionB: '8 7 6 5 4 3', correct: 'A' },
-            { question: 'Urutan menurun 12-7:', optionA: '12 11 10 9 8 7', optionB: '7 8 9 10 11 12', correct: 'A' },
-            { question: 'Urutan dari 14 sampai 18:', optionA: '14 15 16 17 18', optionB: '18 17 16 15 14', correct: 'A' },
-            { question: 'Urutan angka 5-10:', optionA: '5 6 7 8 9 10', optionB: '10 9 8 7 6 5', correct: 'A' },
-            { question: 'Urutan menurun 20-15:', optionA: '15 16 17 18 19 20', optionB: '20 19 18 17 16 15', correct: 'B' },
-            { question: 'Urutan naik 9-14:', optionA: '9 10 11 12 13 14', optionB: '14 13 12 11 10 9', correct: 'A' },
-            { question: 'Urutan dari 2 sampai 7:', optionA: '2 3 4 5 6 7', optionB: '7 6 5 4 3 2', correct: 'A' },
-            { question: 'Urutan menurun 18-13:', optionA: '18 17 16 15 14 13', optionB: '13 14 15 16 17 18', correct: 'A' },
-            { question: 'Urutan angka 10-15:', optionA: '15 14 13 12 11 10', optionB: '10 11 12 13 14 15', correct: 'B' },
-            { question: 'Urutan dari 4 sampai 9:', optionA: '4 5 6 7 8 9', optionB: '9 8 7 6 5 4', correct: 'A' },
-            { question: 'Urutan menurun 17-12:', optionA: '17 16 15 14 13 12', optionB: '12 13 14 15 16 17', correct: 'A' },
-            { question: 'Urutan naik 13-18:', optionA: '18 17 16 15 14 13', optionB: '13 14 15 16 17 18', correct: 'B' },
-            { question: 'Urutan dari 1 sampai 10:', optionA: '1 2 3 4 5 6 7 8 9 10', optionB: '10 9 8 7 6 5 4 3 2 1', correct: 'A' },
-            { question: 'Urutan menurun 20-11:', optionA: '20 19 18 17 16 15 14 13 12 11', optionB: '11 12 13 14 15 16 17 18 19 20', correct: 'A' },
-            { question: 'Urutan angka 5-15:', optionA: '5 6 7 8 9 10 11 12 13 14 15', optionB: '15 14 13 12 11 10 9 8 7 6 5', correct: 'A' },
-            { question: 'Urutan dari 10 sampai 20:', optionA: '10 11 12 13 14 15 16 17 18 19 20', optionB: '20 19 18 17 16 15 14 13 12 11 10', correct: 'A' }
+            { question: 'Urutan angka dari kecil ke besar:', optionA: '1234', optionB: '4321', correct: 'A' },
+            { question: 'Urutan angka yang benar:', optionA: '4213', optionB: '1234', correct: 'B' }
         ];
 
         // Battle Mode Functions
@@ -1167,41 +950,16 @@
             return Math.random().toString(36).substring(2, 6).toUpperCase();
         }
 
-        function generatePlayerId() {
-            return 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
-        }
-
         function createRoom() {
             roomCode = generateRoomCode();
-            playerId = generatePlayerId();
             isAdmin = true;
-            
-            const room = {
-                code: roomCode,
-                players: [{ 
-                    id: playerId,
-                    name: username, 
-                    score: 0, 
-                    isAdmin: true 
-                }],
-                createdAt: Date.now(),
-                gameStarted: false,
-                gameEnded: false,
-                questionCount: 10,
-                questions: []
-            };
-            
-            saveRoomToFirebase(room);
-            players = room.players;
+            players = [{ name: username, score: 0, isAdmin: true }];
             
             document.getElementById('battleMenu').classList.add('hidden');
             document.getElementById('battleWaiting').classList.remove('hidden');
             document.getElementById('displayRoomCode').textContent = roomCode;
             
             updatePlayerList();
-            
-            // Start listening to room changes
-            listenToRoom();
             
             // Admin can change settings
             document.getElementById('questionCountSelect').disabled = false;
@@ -1216,49 +974,25 @@
             }
             
             roomCode = code;
-            playerId = generatePlayerId();
+            isAdmin = false;
             
-            getRoomFromFirebase((room) => {
-                if (!room) {
-                    alert('Room tidak ditemukan! Pastikan kode benar.');
-                    return;
-                }
-                
-                if (room.players.length >= 15) {
-                    alert('Room sudah penuh! (Maksimal 15 pemain)');
-                    return;
-                }
-                
-                if (room.gameStarted) {
-                    alert('Game sudah dimulai! Tidak bisa join.');
-                    return;
-                }
-                
-                isAdmin = false;
-                
-                // Add player to room
-                room.players.push({ 
-                    id: playerId,
-                    name: username, 
-                    score: 0, 
-                    isAdmin: false 
-                });
-                
-                saveRoomToFirebase(room);
-                players = room.players;
-                
-                document.getElementById('battleMenu').classList.add('hidden');
-                document.getElementById('battleWaiting').classList.remove('hidden');
-                document.getElementById('displayRoomCode').textContent = roomCode;
-                
-                // Non-admin cannot change settings
-                document.getElementById('questionCountSelect').disabled = true;
-                
-                updatePlayerList();
-                
-                // Start listening to room changes
-                listenToRoom();
-            });
+            // Simulate joining (in real app, this would sync with server)
+            players.push({ name: username, score: 0, isAdmin: false });
+            
+            if (players.length > 15) {
+                alert('Room sudah penuh! (Maksimal 15 pemain)');
+                players.pop();
+                return;
+            }
+            
+            document.getElementById('battleMenu').classList.add('hidden');
+            document.getElementById('battleWaiting').classList.remove('hidden');
+            document.getElementById('displayRoomCode').textContent = roomCode;
+            
+            // Non-admin cannot change settings
+            document.getElementById('questionCountSelect').disabled = true;
+            
+            updatePlayerList();
         }
 
         function updatePlayerList() {
@@ -1284,46 +1018,13 @@
         }
 
         function startBattle() {
-            if (!isAdmin) {
-                alert('Hanya admin yang bisa memulai game!');
-                return;
-            }
-            
-            // Show loading
-            const startBtn = document.getElementById('startBattleBtn');
-            startBtn.disabled = true;
-            startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memuat soal...';
-            
             questionCount = parseInt(document.getElementById('questionCountSelect').value);
             
-            // Fetch questions from API
-            fetchTriviaQuestions(questionCount).then(questions => {
-                if (questions.length === 0) {
-                    startBtn.disabled = false;
-                    startBtn.innerHTML = '<i class="fas fa-play"></i> Mulai Battle!';
-                    return;
-                }
-                
-                battleQuestions = questions;
-                
-                // Update room with game started status
-                getRoomFromFirebase((room) => {
-                    if (room) {
-                        room.gameStarted = true;
-                        room.gameEnded = false;
-                        room.questionCount = questionCount;
-                        room.questions = battleQuestions;
-                        room.currentQuestion = 0;
-                        room.questionStartTime = Date.now();
-                        saveRoomToFirebase(room);
-                    }
-                });
-                
-                startBattleForAll();
-            });
-        }
-
-        function startBattleForAll() {
+            // Generate random questions
+            battleQuestions = [];
+            const shuffled = [...battleQuestionsDB].sort(() => Math.random() - 0.5);
+            battleQuestions = shuffled.slice(0, questionCount);
+            
             currentQuestionIndex = 0;
             playerScore = 0;
             
@@ -1346,65 +1047,44 @@
             document.getElementById('battleQuestion').innerHTML = `
                 ${question.question}
                 <span class="difficulty-badge difficulty-${question.difficulty}">
-                    ${question.difficulty === 'easy' ? 'Easy' : question.difficulty === 'medium' ? 'Medium' : 'Hard'} 
-                    (+${question.weight} points)
+                    ${question.difficulty === 'easy' ? 'Mudah' : question.difficulty === 'medium' ? 'Sedang' : 'Sulit'} 
+                    (+${question.weight} poin)
                 </span>
             `;
             
-            document.getElementById('optionA').textContent = question.options[0] || 'N/A';
-            document.getElementById('optionB').textContent = question.options[1] || 'N/A';
-            document.getElementById('optionC').textContent = question.options[2] || 'N/A';
-            document.getElementById('optionD').textContent = question.options[3] || 'N/A';
+            document.getElementById('optionA').textContent = question.options[0];
+            document.getElementById('optionB').textContent = question.options[1];
+            document.getElementById('optionC').textContent = question.options[2];
+            document.getElementById('optionD').textContent = question.options[3];
             
             // Reset options
             document.querySelectorAll('.answer-option').forEach(opt => {
                 opt.className = 'answer-option';
-                opt.style.pointerEvents = 'auto';
             });
             
             selectedAnswer = null;
             timeLeft = 7;
-            
-            // Sync start time from Firebase or set new
-            if (!currentQuestionStartTime) {
-                currentQuestionStartTime = Date.now();
-            }
-            
-            startSyncTimer();
+            startTimer();
         }
 
-        function startSyncTimer() {
-            clearInterval(questionTimerInterval);
+        function startTimer() {
+            clearInterval(timerInterval);
             
-            questionTimerInterval = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - currentQuestionStartTime) / 1000);
-                timeLeft = Math.max(0, 7 - elapsed);
-                
+            timerInterval = setInterval(() => {
+                timeLeft--;
                 document.getElementById('timerText').textContent = timeLeft;
+                
                 const percentage = (timeLeft / 7) * 100;
                 document.getElementById('timerFill').style.width = percentage + '%';
                 
                 if (timeLeft <= 0) {
-                    clearInterval(questionTimerInterval);
-                    
-                    // Disable all options
-                    document.querySelectorAll('.answer-option').forEach(opt => {
-                        opt.style.pointerEvents = 'none';
-                    });
-                    
-                    // Only admin moves to next question
-                    if (isAdmin) {
-                        setTimeout(() => {
-                            moveToNextQuestion();
-                        }, 2000);
-                    }
+                    clearInterval(timerInterval);
+                    checkAnswer();
                 }
-            }, 100);
+            }, 1000);
         }
 
         function selectAnswer(element, answer) {
-            if (timeLeft <= 0) return;
-            
             // Remove previous selection
             document.querySelectorAll('.answer-option').forEach(opt => {
                 opt.classList.remove('selected');
@@ -1412,140 +1092,52 @@
             
             element.classList.add('selected');
             selectedAnswer = answer;
-        }
-
-        function moveToNextQuestion() {
-            if (!isAdmin) return;
             
-            const question = battleQuestions[currentQuestionIndex];
-            
-            // Show correct/wrong for all players
-            showAnswerFeedback(question.correct);
-            
+            // Auto submit after selection
             setTimeout(() => {
-                currentQuestionIndex++;
-                currentQuestionStartTime = 0;
-                
-                if (currentQuestionIndex >= battleQuestions.length) {
-                    // Game ended
-                    getRoomFromFirebase((room) => {
-                        if (room) {
-                            room.gameEnded = true;
-                            // Sort and save final scores
-                            room.players.sort((a, b) => b.score - a.score);
-                            saveRoomToFirebase(room);
-                        }
-                    });
-                } else {
-                    // Move to next question
-                    getRoomFromFirebase((room) => {
-                        if (room) {
-                            room.currentQuestion = currentQuestionIndex;
-                            room.questionStartTime = Date.now();
-                            currentQuestionStartTime = room.questionStartTime;
-                            saveRoomToFirebase(room);
-                        }
-                    });
-                }
-            }, 2000);
+                checkAnswer();
+            }, 500);
         }
 
-        function showAnswerFeedback(correctAnswer) {
+        function checkAnswer() {
+            clearInterval(timerInterval);
+            
             const question = battleQuestions[currentQuestionIndex];
-            const isCorrect = selectedAnswer === correctAnswer;
+            const isCorrect = selectedAnswer === question.correct;
             
-            // Update score if correct
-            if (isCorrect) {
-                playerScore += question.weight;
-                document.getElementById('playerScore').textContent = playerScore;
-                
-                // Update score in Firebase
-                getRoomFromFirebase((room) => {
-                    if (room) {
-                        const playerIndex = room.players.findIndex(p => p.id === playerId);
-                        if (playerIndex !== -1) {
-                            room.players[playerIndex].score = playerScore;
-                            saveRoomToFirebase(room);
-                        }
-                    }
-                });
-            }
-            
-            // Show correct/wrong visual feedback
+            // Show correct/wrong answers
             document.querySelectorAll('.answer-option').forEach((opt, idx) => {
                 const optionLetter = ['A', 'B', 'C', 'D'][idx];
-                if (optionLetter === correctAnswer) {
+                if (optionLetter === question.correct) {
                     opt.classList.add('correct');
                 } else if (optionLetter === selectedAnswer && !isCorrect) {
                     opt.classList.add('wrong');
                 }
             });
+            
+            // Update score if correct
+            if (isCorrect) {
+                playerScore += question.weight;
+                document.getElementById('playerScore').textContent = playerScore;
+            }
+            
+            // Move to next question after 2 seconds
+            setTimeout(() => {
+                currentQuestionIndex++;
+                loadBattleQuestion();
+            }, 2000);
         }
 
         function endBattle() {
-            // Update player final score in Firebase
-            getRoomFromFirebase((room) => {
-                if (room) {
-                    const playerIndex = room.players.findIndex(p => p.id === playerId);
-                    if (playerIndex !== -1) {
-                        room.players[playerIndex].score = playerScore;
-                        room.players[playerIndex].finished = true;
-                    }
-                    saveRoomToFirebase(room);
-                }
-            });
-        }
-
-        function endBattleForAll() {
-            clearInterval(questionTimerInterval);
+            // Update player score
+            const playerIndex = players.findIndex(p => p.name === username);
+            if (playerIndex !== -1) {
+                players[playerIndex].score = playerScore;
+            }
             
-            getRoomFromFirebase((room) => {
-                if (room) {
-                    // Get sorted players from Firebase
-                    players = room.players.sort((a, b) => b.score - a.score);
-                    
-                    document.getElementById('battleGame').classList.add('hidden');
-                    document.getElementById('battleResults').classList.remove('hidden');
-                    
-                    displayResults();
-                }
-            });
-        }
-                
- 
-
-        
-        function listenToRoom() {
-            if (roomListener) return; // Already listening
+            // Sort players by score
+            players.sort((a, b) => b.score - a.score);
             
-            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
-            roomListener = window.firebaseOnValue(roomRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    const room = snapshot.val();
-                    players = room.players || [];
-                    updatePlayerList();
-                    
-                    // Check if game started
-                    if (room.gameStarted && !room.gameEnded) {
-                        if (document.getElementById('battleWaiting').classList.contains('hidden') === false) {
-                            // Game just started, load it
-                            questionCount = room.questionCount || 10;
-                            battleQuestions = room.questions || [];
-                            startBattleForAll();
-                        }
-                    }
-                    
-                    // Check if game ended
-                    if (room.gameEnded) {
-                        if (!document.getElementById('battleResults').classList.contains('hidden') === false) {
-                            endBattleForAll();
-                        }
-                    }
-                }
-            });
-        }
-
-        function endBattleForAll() {
             document.getElementById('battleGame').classList.add('hidden');
             document.getElementById('battleResults').classList.remove('hidden');
             
@@ -1589,34 +1181,16 @@
         }
 
         function resetRoom() {
-            if (!isAdmin) {
-                alert('Hanya admin yang bisa reset room!');
-                return;
-            }
+            // Reset scores
+            players.forEach(p => p.score = 0);
+            currentQuestionIndex = 0;
+            playerScore = 0;
             
-            // Reset scores in Firebase
-            getRoomFromFirebase((room) => {
-                if (room) {
-                    room.players.forEach(p => {
-                        p.score = 0;
-                        p.finished = false;
-                    });
-                    room.gameStarted = false;
-                    room.gameEnded = false;
-                    room.questions = [];
-                    saveRoomToFirebase(room);
-                    players = room.players;
-                    
-                    currentQuestionIndex = 0;
-                    playerScore = 0;
-                    
-                    document.getElementById('battleResults').classList.add('hidden');
-                    document.getElementById('battleWaiting').classList.remove('hidden');
-                    document.getElementById('playerScore').textContent = '0';
-                    
-                    updatePlayerList();
-                }
-            });
+            document.getElementById('battleResults').classList.add('hidden');
+            document.getElementById('battleWaiting').classList.remove('hidden');
+            document.getElementById('playerScore').textContent = '0';
+            
+            updatePlayerList();
         }
 
         function showBattleMenu() {
@@ -1842,30 +1416,6 @@
 
         function goBack() {
             clearInterval(timerInterval);
-            stopListeningToRoom();
-            
-            // Leave room if in battle
-            if (roomCode) {
-                getRoomFromFirebase((room) => {
-                    if (room && !room.gameStarted) {
-                        // Remove player from room
-                        room.players = room.players.filter(p => p.id !== playerId);
-                        
-                        if (room.players.length === 0) {
-                            // Delete room if empty
-                            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
-                            window.firebaseRemove(roomRef);
-                        } else {
-                            // If admin left, make first player new admin
-                            if (isAdmin && room.players.length > 0) {
-                                room.players[0].isAdmin = true;
-                            }
-                            saveRoomToFirebase(room);
-                        }
-                    }
-                });
-                roomCode = '';
-            }
             
             document.querySelectorAll('.game-card').forEach(card => card.classList.add('hidden'));
             document.querySelectorAll('.menu-card').forEach(card => card.classList.add('hidden'));
