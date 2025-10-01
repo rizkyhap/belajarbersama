@@ -438,7 +438,8 @@
                     <p class="notes-text">
                         📝 Soal di dalam apps ini dikhususkan untuk anak di bawah 6 tahun<br>
                         👨‍👩‍👧‍👦 Ayah & Bunda harus memantau anak dalam belajar!<br>
-                        ⚔️ Mode Battle: Adu cepat & pintar dengan teman!
+                        ⚔️ Mode Battle: Adu cepat & pintar dengan teman!<br>
+                        💡 <strong>Buka di TAB/WINDOW berbeda untuk multiplayer!</strong>
                     </p>
                 </div>
             </div>
@@ -668,6 +669,8 @@
         let timerInterval = null;
         let selectedAnswer = null;
         let questionCount = 10;
+        let playerId = '';
+        let syncInterval = null;
 
         // Battle Questions Database (Soal CPNS style)
         const battleQuestionsDB = [
@@ -954,16 +957,67 @@
             return Math.random().toString(36).substring(2, 6).toUpperCase();
         }
 
+        function generatePlayerId() {
+            return 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+        }
+
+        function saveRoomToStorage(room) {
+            localStorage.setItem('battleRoom_' + roomCode, JSON.stringify(room));
+        }
+
+        function getRoomFromStorage() {
+            const data = localStorage.getItem('battleRoom_' + roomCode);
+            return data ? JSON.parse(data) : null;
+        }
+
+        function syncRoomData() {
+            const room = getRoomFromStorage();
+            if (room) {
+                players = room.players || [];
+                updatePlayerList();
+                
+                // Check if game started
+                if (room.gameStarted && !document.getElementById('battleGame').classList.contains('hidden')) {
+                    // Already in game
+                } else if (room.gameStarted && document.getElementById('battleWaiting').classList.contains('hidden') === false) {
+                    // Game just started, load it
+                    questionCount = room.questionCount || 10;
+                    battleQuestions = room.questions || [];
+                    startBattleForAll();
+                }
+            }
+        }
+
         function createRoom() {
             roomCode = generateRoomCode();
+            playerId = generatePlayerId();
             isAdmin = true;
-            players = [{ name: username, score: 0, isAdmin: true }];
+            
+            const room = {
+                code: roomCode,
+                players: [{ 
+                    id: playerId,
+                    name: username, 
+                    score: 0, 
+                    isAdmin: true 
+                }],
+                createdAt: Date.now(),
+                gameStarted: false,
+                questionCount: 10,
+                questions: []
+            };
+            
+            saveRoomToStorage(room);
+            players = room.players;
             
             document.getElementById('battleMenu').classList.add('hidden');
             document.getElementById('battleWaiting').classList.remove('hidden');
             document.getElementById('displayRoomCode').textContent = roomCode;
             
             updatePlayerList();
+            
+            // Start syncing
+            syncInterval = setInterval(syncRoomData, 1000);
             
             // Admin can change settings
             document.getElementById('questionCountSelect').disabled = false;
@@ -978,16 +1032,36 @@
             }
             
             roomCode = code;
-            isAdmin = false;
+            playerId = generatePlayerId();
+            const room = getRoomFromStorage();
             
-            // Simulate joining (in real app, this would sync with server)
-            players.push({ name: username, score: 0, isAdmin: false });
-            
-            if (players.length > 15) {
-                alert('Room sudah penuh! (Maksimal 15 pemain)');
-                players.pop();
+            if (!room) {
+                alert('Room tidak ditemukan! Pastikan kode benar.');
                 return;
             }
+            
+            if (room.players.length >= 15) {
+                alert('Room sudah penuh! (Maksimal 15 pemain)');
+                return;
+            }
+            
+            if (room.gameStarted) {
+                alert('Game sudah dimulai! Tidak bisa join.');
+                return;
+            }
+            
+            isAdmin = false;
+            
+            // Add player to room
+            room.players.push({ 
+                id: playerId,
+                name: username, 
+                score: 0, 
+                isAdmin: false 
+            });
+            
+            saveRoomToStorage(room);
+            players = room.players;
             
             document.getElementById('battleMenu').classList.add('hidden');
             document.getElementById('battleWaiting').classList.remove('hidden');
@@ -997,6 +1071,9 @@
             document.getElementById('questionCountSelect').disabled = true;
             
             updatePlayerList();
+            
+            // Start syncing
+            syncInterval = setInterval(syncRoomData, 1000);
         }
 
         function updatePlayerList() {
@@ -1022,6 +1099,11 @@
         }
 
         function startBattle() {
+            if (!isAdmin) {
+                alert('Hanya admin yang bisa memulai game!');
+                return;
+            }
+            
             questionCount = parseInt(document.getElementById('questionCountSelect').value);
             
             // Generate random questions
@@ -1029,6 +1111,17 @@
             const shuffled = [...battleQuestionsDB].sort(() => Math.random() - 0.5);
             battleQuestions = shuffled.slice(0, questionCount);
             
+            // Update room with game started status
+            const room = getRoomFromStorage();
+            room.gameStarted = true;
+            room.questionCount = questionCount;
+            room.questions = battleQuestions;
+            saveRoomToStorage(room);
+            
+            startBattleForAll();
+        }
+
+        function startBattleForAll() {
             currentQuestionIndex = 0;
             playerScore = 0;
             
@@ -1133,14 +1226,18 @@
         }
 
         function endBattle() {
-            // Update player score
-            const playerIndex = players.findIndex(p => p.name === username);
-            if (playerIndex !== -1) {
-                players[playerIndex].score = playerScore;
+            // Update player score in room
+            const room = getRoomFromStorage();
+            if (room) {
+                const playerIndex = room.players.findIndex(p => p.id === playerId);
+                if (playerIndex !== -1) {
+                    room.players[playerIndex].score = playerScore;
+                    saveRoomToStorage(room);
+                }
+                
+                // Sort players by score
+                players = room.players.sort((a, b) => b.score - a.score);
             }
-            
-            // Sort players by score
-            players.sort((a, b) => b.score - a.score);
             
             document.getElementById('battleGame').classList.add('hidden');
             document.getElementById('battleResults').classList.remove('hidden');
@@ -1185,8 +1282,21 @@
         }
 
         function resetRoom() {
-            // Reset scores
-            players.forEach(p => p.score = 0);
+            if (!isAdmin) {
+                alert('Hanya admin yang bisa reset room!');
+                return;
+            }
+            
+            // Reset scores in room
+            const room = getRoomFromStorage();
+            if (room) {
+                room.players.forEach(p => p.score = 0);
+                room.gameStarted = false;
+                room.questions = [];
+                saveRoomToStorage(room);
+                players = room.players;
+            }
+            
             currentQuestionIndex = 0;
             playerScore = 0;
             
@@ -1420,6 +1530,27 @@
 
         function goBack() {
             clearInterval(timerInterval);
+            clearInterval(syncInterval);
+            
+            // Leave room if in battle
+            if (roomCode) {
+                const room = getRoomFromStorage();
+                if (room && !room.gameStarted) {
+                    // Remove player from room
+                    room.players = room.players.filter(p => p.id !== playerId);
+                    if (room.players.length === 0) {
+                        // Delete room if empty
+                        localStorage.removeItem('battleRoom_' + roomCode);
+                    } else {
+                        // If admin left, make first player new admin
+                        if (isAdmin && room.players.length > 0) {
+                            room.players[0].isAdmin = true;
+                        }
+                        saveRoomToStorage(room);
+                    }
+                }
+                roomCode = '';
+            }
             
             document.querySelectorAll('.game-card').forEach(card => card.classList.add('hidden'));
             document.querySelectorAll('.menu-card').forEach(card => card.classList.add('hidden'));
