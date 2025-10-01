@@ -598,9 +598,10 @@
         <!-- Battle Results -->
         <div id="battleResults" class="game-card hidden">
             <h2 class="text-center mb-4">🏆 Hasil Battle</h2>
-<!--             
+            
             <div class="podium" id="podium">
-            </div> -->
+                <!-- Top 3 will be displayed here -->
+            </div>
             
             <div class="leaderboard">
                 <h4 class="text-center mb-3">📊 Leaderboard Lengkap</h4>
@@ -710,21 +711,20 @@
         let questionTimerInterval = null;
         let currentQuestionStartTime = 0;
 
-        // API Configuration - QuizAPI.io
-        const QUIZ_API_URL = 'https://quizapi.io/api/v1/questions';
-        const QUIZ_API_KEY = 'YOUR_API_KEY_HERE'; // User perlu ganti dengan API key mereka
+        // API Configuration - Open Trivia Database (NO API KEY NEEDED!)
+        const TRIVIA_API_URL = 'https://opentdb.com/api.php';
 
-        // Fetch questions from QuizAPI
+        // Fetch questions from Open Trivia DB
         async function fetchTriviaQuestions(count) {
             try {
-                // QuizAPI params
+                // Open Trivia DB params
                 const params = new URLSearchParams({
-                    apiKey: QUIZ_API_KEY,
-                    limit: count,
-                    difficulty: 'Easy,Medium,Hard' // Mix difficulties
+                    amount: count,
+                    type: 'multiple', // Multiple choice questions
+                    encode: 'url3986' // URL encoding to handle special characters
                 });
                 
-                const response = await fetch(`${QUIZ_API_URL}?${params}`);
+                const response = await fetch(`${TRIVIA_API_URL}?${params}`);
                 
                 if (!response.ok) {
                     throw new Error(`API Error: ${response.status}`);
@@ -732,54 +732,49 @@
                 
                 const data = await response.json();
                 
-                if (!data || data.length === 0) {
+                if (!data || data.response_code !== 0 || !data.results || data.results.length === 0) {
                     throw new Error('No questions returned from API');
                 }
                 
-                // Transform QuizAPI data to our format
-                return data.map((q) => {
-                    const answers = q.answers;
-                    const correctAnswers = q.correct_answers;
+                // Transform Open Trivia DB data to our format
+                return data.results.map((q) => {
+                    // Decode URL encoded text
+                    const decodeText = (text) => decodeURIComponent(text);
                     
-                    // Get all non-null answers
-                    const options = [];
-                    const correctKey = [];
+                    // Combine correct and incorrect answers
+                    const allAnswers = [
+                        decodeText(q.correct_answer),
+                        ...q.incorrect_answers.map(a => decodeText(a))
+                    ];
                     
-                    Object.keys(answers).forEach(key => {
-                        if (answers[key] !== null) {
-                            options.push(answers[key]);
-                            // Check if this is correct answer
-                            const correctKey_name = key + '_correct';
-                            if (correctAnswers[correctKey_name] === 'true') {
-                                correctKey.push(options.length - 1);
-                            }
-                        }
-                    });
+                    // Shuffle answers
+                    const shuffled = allAnswers.sort(() => Math.random() - 0.5);
                     
-                    // Ensure we have exactly 4 options
-                    while (options.length < 4) {
-                        options.push('N/A');
+                    // Find correct answer position
+                    const correctIndex = shuffled.indexOf(decodeText(q.correct_answer));
+                    const correctLetter = ['A', 'B', 'C', 'D'][correctIndex];
+                    
+                    // Ensure we have exactly 4 options (pad if needed)
+                    while (shuffled.length < 4) {
+                        shuffled.push('N/A');
                     }
-                    
-                    // Get correct answer letter (A, B, C, D)
-                    const correctLetter = ['A', 'B', 'C', 'D'][correctKey[0] || 0];
                     
                     // Determine weight based on difficulty
                     const difficulty = q.difficulty ? q.difficulty.toLowerCase() : 'medium';
                     const weight = difficulty === 'easy' ? 5 : difficulty === 'hard' ? 15 : 10;
                     
                     return {
-                        category: q.category || 'General',
+                        category: decodeText(q.category),
                         difficulty: difficulty,
                         weight: weight,
-                        question: q.question,
-                        options: options.slice(0, 4),
+                        question: decodeText(q.question),
+                        options: shuffled.slice(0, 4),
                         correct: correctLetter
                     };
                 });
             } catch (error) {
                 console.error('Error fetching quiz questions:', error);
-                alert('Gagal mengambil soal dari QuizAPI!\n\nPastikan:\n1. API Key sudah diisi\n2. Koneksi internet aktif\n3. Quota API masih tersedia (100/hari gratis)');
+                alert('Gagal mengambil soal dari API!\n\nError: ' + error.message + '\n\nPastikan koneksi internet aktif.');
                 return [];
             }
         }
@@ -1515,34 +1510,7 @@
             });
         }
                 
-        
-        function listenToRoom() {
-            if (roomListener) return; // Already listening
-            
-            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
-            roomListener = window.firebaseOnValue(roomRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    const room = snapshot.val();
-                    players = room.players || [];
-                    updatePlayerList();
-                    
-                    // Check if game started
-                    if (room.gameStarted && !room.gameEnded) {
-                        if (document.getElementById('battleWaiting').classList.contains('hidden') === false) {
-                            // Game just started, load it
-                            questionCount = room.questionCount || 10;
-                            battleQuestions = room.questions || [];
-                            startBattleForAll();
-                        }
-                    }
-                    
-                    // Check if game ended
-                    if (room.gameEnded) {
-                        if (!document.getElementById('battleResults').classList.contains('hidden') === false) {
-                            endBattleForAll();
-                        }
-                    }
-                }
+                endBattleForAll();
             });
         }
 
