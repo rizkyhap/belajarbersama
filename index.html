@@ -475,7 +475,7 @@
                         📝 Soal di dalam apps ini dikhususkan untuk anak di bawah 6 tahun<br>
                         👨‍👩‍👧‍👦 Ayah & Bunda harus memantau anak dalam belajar!<br>
                         ⚔️ Mode Battle: Adu cepat & pintar dengan teman!<br>
-                         <strong><b>Update Version 2.0</b></strong>
+                        @<strong>Update Version 2.0</strong>
                     </p>
                 </div>
             </div>
@@ -598,7 +598,11 @@
         <!-- Battle Results -->
         <div id="battleResults" class="game-card hidden">
             <h2 class="text-center mb-4">🏆 Hasil Battle</h2>
-
+            
+            <div class="podium" id="podium">
+                <!-- Top 3 will be displayed here -->
+            </div>
+            
             <div class="leaderboard">
                 <h4 class="text-center mb-3">📊 Leaderboard Lengkap</h4>
                 <div id="fullLeaderboard">
@@ -1512,7 +1516,36 @@
             });
         }
                 
-                endBattleForAll();
+ 
+
+        
+        function listenToRoom() {
+            if (roomListener) return; // Already listening
+            
+            const roomRef = window.firebaseRef(window.firebaseDB, 'rooms/' + roomCode);
+            roomListener = window.firebaseOnValue(roomRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const room = snapshot.val();
+                    players = room.players || [];
+                    updatePlayerList();
+                    
+                    // Check if game started
+                    if (room.gameStarted && !room.gameEnded) {
+                        if (document.getElementById('battleWaiting').classList.contains('hidden') === false) {
+                            // Game just started, load it
+                            questionCount = room.questionCount || 10;
+                            battleQuestions = room.questions || [];
+                            startBattleForAll();
+                        }
+                    }
+                    
+                    // Check if game ended
+                    if (room.gameEnded) {
+                        if (!document.getElementById('battleResults').classList.contains('hidden') === false) {
+                            endBattleForAll();
+                        }
+                    }
+                }
             });
         }
 
