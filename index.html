@@ -475,7 +475,7 @@
                         📝 Soal di dalam apps ini dikhususkan untuk anak di bawah 6 tahun<br>
                         👨‍👩‍👧‍👦 Ayah & Bunda harus memantau anak dalam belajar!<br>
                         ⚔️ Mode Battle: Adu cepat & pintar dengan teman!<br>
-                        @<strong>Update Version 2.0</strong>
+                        @<strong>Version 2.1</strong>
                     </p>
                 </div>
             </div>
@@ -711,20 +711,21 @@
         let questionTimerInterval = null;
         let currentQuestionStartTime = 0;
 
-        // API Configuration - Open Trivia Database (NO API KEY NEEDED!)
-        const TRIVIA_API_URL = 'https://opentdb.com/api.php';
+        // API Configuration - QuizAPI.io
+        const QUIZ_API_URL = 'https://quizapi.io/api/v1/questions';
+        const QUIZ_API_KEY = 'YOUR_API_KEY_HERE'; // User perlu ganti dengan API key mereka
 
-        // Fetch questions from Open Trivia DB
+        // Fetch questions from QuizAPI
         async function fetchTriviaQuestions(count) {
             try {
-                // Open Trivia DB params
+                // QuizAPI params
                 const params = new URLSearchParams({
-                    amount: count,
-                    type: 'multiple', // Multiple choice questions
-                    encode: 'url3986' // URL encoding to handle special characters
+                    apiKey: QUIZ_API_KEY,
+                    limit: count,
+                    difficulty: 'Easy,Medium,Hard' // Mix difficulties
                 });
                 
-                const response = await fetch(`${TRIVIA_API_URL}?${params}`);
+                const response = await fetch(`${QUIZ_API_URL}?${params}`);
                 
                 if (!response.ok) {
                     throw new Error(`API Error: ${response.status}`);
@@ -732,49 +733,54 @@
                 
                 const data = await response.json();
                 
-                if (!data || data.response_code !== 0 || !data.results || data.results.length === 0) {
+                if (!data || data.length === 0) {
                     throw new Error('No questions returned from API');
                 }
                 
-                // Transform Open Trivia DB data to our format
-                return data.results.map((q) => {
-                    // Decode URL encoded text
-                    const decodeText = (text) => decodeURIComponent(text);
+                // Transform QuizAPI data to our format
+                return data.map((q) => {
+                    const answers = q.answers;
+                    const correctAnswers = q.correct_answers;
                     
-                    // Combine correct and incorrect answers
-                    const allAnswers = [
-                        decodeText(q.correct_answer),
-                        ...q.incorrect_answers.map(a => decodeText(a))
-                    ];
+                    // Get all non-null answers
+                    const options = [];
+                    const correctKey = [];
                     
-                    // Shuffle answers
-                    const shuffled = allAnswers.sort(() => Math.random() - 0.5);
+                    Object.keys(answers).forEach(key => {
+                        if (answers[key] !== null) {
+                            options.push(answers[key]);
+                            // Check if this is correct answer
+                            const correctKey_name = key + '_correct';
+                            if (correctAnswers[correctKey_name] === 'true') {
+                                correctKey.push(options.length - 1);
+                            }
+                        }
+                    });
                     
-                    // Find correct answer position
-                    const correctIndex = shuffled.indexOf(decodeText(q.correct_answer));
-                    const correctLetter = ['A', 'B', 'C', 'D'][correctIndex];
-                    
-                    // Ensure we have exactly 4 options (pad if needed)
-                    while (shuffled.length < 4) {
-                        shuffled.push('N/A');
+                    // Ensure we have exactly 4 options
+                    while (options.length < 4) {
+                        options.push('N/A');
                     }
+                    
+                    // Get correct answer letter (A, B, C, D)
+                    const correctLetter = ['A', 'B', 'C', 'D'][correctKey[0] || 0];
                     
                     // Determine weight based on difficulty
                     const difficulty = q.difficulty ? q.difficulty.toLowerCase() : 'medium';
                     const weight = difficulty === 'easy' ? 5 : difficulty === 'hard' ? 15 : 10;
                     
                     return {
-                        category: decodeText(q.category),
+                        category: q.category || 'General',
                         difficulty: difficulty,
                         weight: weight,
-                        question: decodeText(q.question),
-                        options: shuffled.slice(0, 4),
+                        question: q.question,
+                        options: options.slice(0, 4),
                         correct: correctLetter
                     };
                 });
             } catch (error) {
                 console.error('Error fetching quiz questions:', error);
-                alert('Gagal mengambil soal dari API!\n\nError: ' + error.message + '\n\nPastikan koneksi internet aktif.');
+                alert('Gagal mengambil soal dari QuizAPI!\n\nPastikan:\n1. API Key sudah diisi\n2. Koneksi internet aktif\n3. Quota API masih tersedia (100/hari gratis)');
                 return [];
             }
         }
@@ -1128,36 +1134,8 @@
         ];
 
         const sequenceProblems = [
-            { question: 'Urutan angka dari kecil ke besar:', optionA: '1 2 3 4 5', optionB: '5 4 3 2 1', correct: 'A' },
-            { question: 'Urutan angka yang benar:', optionA: '4 2 1 3', optionB: '1 2 3 4', correct: 'B' },
-            { question: 'Urutan dari 1 sampai 5:', optionA: '1 3 2 4 5', optionB: '1 2 3 4 5', correct: 'B' },
-            { question: 'Urutan menurun dari 5 ke 1:', optionA: '5 4 3 2 1', optionB: '1 2 3 4 5', correct: 'A' },
-            { question: 'Urutan naik yang benar:', optionA: '2 1 4 3 5', optionB: '1 2 3 4 5', correct: 'B' },
-            { question: 'Urutan dari 6 sampai 10:', optionA: '6 7 8 9 10', optionB: '10 9 8 7 6', correct: 'A' },
-            { question: 'Urutan menurun dari 10:', optionA: '10 9 8 7 6', optionB: '6 7 8 9 10', correct: 'A' },
-            { question: 'Urutan angka 11-15:', optionA: '15 14 13 12 11', optionB: '11 12 13 14 15', correct: 'B' },
-            { question: 'Urutan dari 16 ke 20:', optionA: '16 17 18 19 20', optionB: '20 19 18 17 16', correct: 'A' },
-            { question: 'Urutan menurun 20-16:', optionA: '20 19 18 17 16', optionB: '16 17 18 19 20', correct: 'A' },
-            { question: 'Urutan angka 1-6:', optionA: '6 5 4 3 2 1', optionB: '1 2 3 4 5 6', correct: 'B' },
-            { question: 'Urutan dari 7 sampai 12:', optionA: '7 8 9 10 11 12', optionB: '12 11 10 9 8 7', correct: 'A' },
-            { question: 'Urutan menurun 15-10:', optionA: '15 14 13 12 11 10', optionB: '10 11 12 13 14 15', correct: 'A' },
-            { question: 'Urutan naik 8-13:', optionA: '13 12 11 10 9 8', optionB: '8 9 10 11 12 13', correct: 'B' },
-            { question: 'Urutan angka 3-8:', optionA: '3 4 5 6 7 8', optionB: '8 7 6 5 4 3', correct: 'A' },
-            { question: 'Urutan menurun 12-7:', optionA: '12 11 10 9 8 7', optionB: '7 8 9 10 11 12', correct: 'A' },
-            { question: 'Urutan dari 14 sampai 18:', optionA: '14 15 16 17 18', optionB: '18 17 16 15 14', correct: 'A' },
-            { question: 'Urutan angka 5-10:', optionA: '5 6 7 8 9 10', optionB: '10 9 8 7 6 5', correct: 'A' },
-            { question: 'Urutan menurun 20-15:', optionA: '15 16 17 18 19 20', optionB: '20 19 18 17 16 15', correct: 'B' },
-            { question: 'Urutan naik 9-14:', optionA: '9 10 11 12 13 14', optionB: '14 13 12 11 10 9', correct: 'A' },
-            { question: 'Urutan dari 2 sampai 7:', optionA: '2 3 4 5 6 7', optionB: '7 6 5 4 3 2', correct: 'A' },
-            { question: 'Urutan menurun 18-13:', optionA: '18 17 16 15 14 13', optionB: '13 14 15 16 17 18', correct: 'A' },
-            { question: 'Urutan angka 10-15:', optionA: '15 14 13 12 11 10', optionB: '10 11 12 13 14 15', correct: 'B' },
-            { question: 'Urutan dari 4 sampai 9:', optionA: '4 5 6 7 8 9', optionB: '9 8 7 6 5 4', correct: 'A' },
-            { question: 'Urutan menurun 17-12:', optionA: '17 16 15 14 13 12', optionB: '12 13 14 15 16 17', correct: 'A' },
-            { question: 'Urutan naik 13-18:', optionA: '18 17 16 15 14 13', optionB: '13 14 15 16 17 18', correct: 'B' },
-            { question: 'Urutan dari 1 sampai 10:', optionA: '1 2 3 4 5 6 7 8 9 10', optionB: '10 9 8 7 6 5 4 3 2 1', correct: 'A' },
-            { question: 'Urutan menurun 20-11:', optionA: '20 19 18 17 16 15 14 13 12 11', optionB: '11 12 13 14 15 16 17 18 19 20', correct: 'A' },
-            { question: 'Urutan angka 5-15:', optionA: '5 6 7 8 9 10 11 12 13 14 15', optionB: '15 14 13 12 11 10 9 8 7 6 5', correct: 'A' },
-            { question: 'Urutan dari 10 sampai 20:', optionA: '10 11 12 13 14 15 16 17 18 19 20', optionB: '20 19 18 17 16 15 14 13 12 11 10', correct: 'A' }
+            { question: 'Urutan angka dari kecil ke besar:', optionA: '1234', optionB: '4321', correct: 'A' },
+            { question: 'Urutan angka yang benar:', optionA: '4213', optionB: '1234', correct: 'B' }
         ];
 
         // Battle Mode Functions
